@@ -42,3 +42,20 @@ Status
 
 - Milestone 1 & 2 fully working. Milestone 3 prepared as boilerplate only.
 
+Frontend (optional)
+-------------------
+
+This repo includes a minimal React + Vite frontend in `frontend/` that can be used
+to submit tickets from a browser.
+
+How to run frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The frontend talks to the backend at `http://127.0.0.1:5000/tickets`. Run the Flask
+app first, then the frontend dev server.
+
