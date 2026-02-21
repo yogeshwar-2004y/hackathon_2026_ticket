@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Ticket Router Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>Ticket Router</h1>
+        <p>Mode: {{ mode.upper() }}</p>
+      </header>
+
+      <main>
+        <section class="card">
+          <h2>Submit Ticket</h2>
+          <form id="ticketForm">
+            <label>Subject<input name="subject" required /></label>
+            <label>Body<textarea name="body" rows="5" required></textarea></label>
+            <label>Customer<input name="customer" placeholder="alice@example.com" /></label>
+            <div class="actions">
+              <button type="submit">Submit</button>
+            </div>
+          </form>
+          <div id="submitResult" class="result"></div>
+        </section>
+
+        <section class="card">
+          <h2>Priority Queue</h2>
+          <div class="breaker" id="breakerStatus">
+            Circuit: <span id="breakerDot" class="dot closed"></span>
+            <strong id="breakerState">CLOSED</strong>
+            <span id="breakerInfo"></span>
+          </div>
+          <div id="queueList">Loading...</div>
+        </section>
+
+        <section class="card">
+          <h2>Logs</h2>
+          <pre id="logs">No logs yet. Background worker logs appear on server console.</pre>
+        </section>
+      </main>
+
+      <footer>
+        <small>Simple dashboard — for demo only.</small>
+      </footer>
+    </div>
+
+    <script>
+      async function loadQueue() {
+        const res = await fetch("/queue");
+        if (!res.ok) return;
+        const data = await res.json();
+        const el = document.getElementById("queueList");
+        if (!data.tickets || data.tickets.length === 0) {
+          el.innerHTML = "<em>Queue is empty</em>";
+          return;
+        }
+        el.innerHTML = data.tickets
+          .map((t) => {
+            const kw = (t.metadata && t.metadata.keyword) ? t.metadata.keyword : {};
+            const md = (t.metadata && t.metadata.model) ? t.metadata.model : {};
+            return `<div class="ticket">
+                <div class="row"><strong>${t.category || "Unk"}</strong> <span class="urg">(${t.urgency})</span></div>
+                <div class="sub">${t.subject}</div>
+                <div class="meta">Customer: ${t.customer}</div>
+                <div class="compare">Keyword → ${kw.category || "N/A"} (urg=${kw.urgency ?? kw.urg ?? "-"}) | Model → ${md.category || "N/A"} (urg=${md.urgency ?? "-"}, conf=${md.confidence ?? "-"})</div>
+              </div>`;
+          })
+          .join("");
+      }
+
+      document.getElementById("ticketForm").addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const form = ev.target;
+        const body = {
+          subject: form.subject.value,
+          body: form.body.value,
+          customer: form.customer.value,
+        };
+        const res = await fetch("/tickets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        document.getElementById("submitResult").innerText = `${res.status} — ${JSON.stringify(data)}`;
+        form.reset();
+        // refresh queue after a short delay
+        setTimeout(loadQueue, 500);
+      });
+
+      async function loadBreaker() {
+        try {
+          const r = await fetch("/breaker");
+          if (!r.ok) return;
+          const b = await r.json();
+          const stateEl = document.getElementById("breakerState");
+          const dot = document.getElementById("breakerDot");
+          const info = document.getElementById("breakerInfo");
+          stateEl.innerText = b.state;
+          dot.className = "dot " + (b.state === "CLOSED" ? "closed" : b.state === "HALF_OPEN" ? "half" : "open");
+          info.innerText = ` failures=${b.consecutive_failures} cooldown=${b.cooldown_remaining ?? 0}s`;
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      // poll breaker
+      loadBreaker();
+      setInterval(loadBreaker, 2000);
+
+      // poll
+      loadQueue();
+      setInterval(loadQueue, 2000);
+    </script>
+  </body>
+</html>
+

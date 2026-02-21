@@ -1,0 +1,24 @@
+:root{--bg:#071018;--card:#0b2430;--accent:#17c0b6;--text:#d7e7ea}
+*{box-sizing:border-box;font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial}
+body{margin:0;background:linear-gradient(180deg,#071018,#071822);color:var(--text);min-height:100vh}
+.wrap{max-width:1000px;margin:24px auto;padding:16px}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.card{background:rgba(255,255,255,0.02);padding:14px;border-radius:8px;margin-bottom:12px;border:1px solid rgba(255,255,255,0.03)}
+label{display:block;margin-bottom:8px}
+input,textarea{width:100%;padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:var(--text)}
+.actions{display:flex;justify-content:flex-end;margin-top:8px}
+button{background:var(--accent);border:none;padding:8px 12px;border-radius:8px;color:#022;font-weight:700;cursor:pointer}
+.ticket{padding:8px;border-bottom:1px solid rgba(255,255,255,0.02)}
+.ticket .sub{color:#b8dfe0}
+.ticket .meta{font-size:12px;opacity:0.8}
+.result{margin-top:8px;color:#bfeee8}
+pre{white-space:pre-wrap;background:transparent;color:var(--text)}
+
+.breaker{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.dot{width:12px;height:12px;border-radius:50%;display:inline-block}
+.dot.closed{background:#2ecc71}
+.dot.half{background:#f1c40f}
+.dot.open{background:#e74c3c}
+.compare{font-size:13px;margin-top:6px;color:#a7d6d7}
+.urg{color:#ffd47a;margin-left:6px}
+

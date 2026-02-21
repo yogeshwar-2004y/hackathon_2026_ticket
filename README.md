@@ -59,3 +59,39 @@ npm run dev
 The frontend talks to the backend at `http://127.0.0.1:5000/tickets`. Run the Flask
 app first, then the frontend dev server.
 
+Redis & Mongo (optional - for M2 broker & persistence)
+----------------------------------------------------
+This project can use Redis as a broker (incoming task list + priority sorted set)
+and MongoDB to persist tickets. If you enable these services the backend will
+enqueue tickets to Redis and store ticket documents in MongoDB.
+
+Install & run locally (macOS examples):
+
+```bash
+# Redis
+brew install redis
+redis-server /usr/local/etc/redis.conf
+
+# MongoDB (Community)
+brew tap mongodb/brew
+brew install mongodb-community@6.0
+brew services start mongodb-community@6.0
+```
+
+Environment variables:
+
+- REDIS_URL (default: redis://127.0.0.1:6379/0)
+- MONGO_URI (default: mongodb://127.0.0.1:27017)
+
+When Redis/Mongo are running, start the backend (M2 mode) as before:
+
+```bash
+export ROUTER_MODE=m2
+export REDIS_URL=redis://127.0.0.1:6379/0
+export MONGO_URI=mongodb://127.0.0.1:27017
+python run.py
+```
+
+The background worker will BRPOP from Redis incoming list and push processed
+tickets into a Redis sorted set for priority.
+
