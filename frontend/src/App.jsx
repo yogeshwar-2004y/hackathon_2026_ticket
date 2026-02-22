@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import PipelineFlow from "./PipelineFlow";
+import SlackPanel from "./SlackPanel";
 
 export default function App() {
   const [subject, setSubject] = useState("");
@@ -10,6 +11,8 @@ export default function App() {
   const [ticketId, setTicketId] = useState(null);
   const [logs, setLogs] = useState([]);
   const [activeStep, setActiveStep] = useState(-1);
+  const [showSlack, setShowSlack] = useState(false);
+  const [alerts, setAlerts] = useState([]);
 
   async function submit(e) {
     e.preventDefault();
@@ -26,7 +29,7 @@ export default function App() {
       setTicketId(data.ticket_id || null);
       // animate pipeline
       setActiveStep(0);
-      const steps = [1,2,3,4,5,6];
+      const steps = [1, 2, 3, 4, 5, 6];
       steps.forEach((s, idx) => {
         setTimeout(() => setActiveStep(s), 600 * (idx + 1));
       });
@@ -36,6 +39,28 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+  }
+
+  // Routing via hash: if #/slack show SlackPage
+  const [route, setRoute] = useState(window.location.hash || "");
+  React.useEffect(() => {
+    const onHash = () => setRoute(window.location.hash || "");
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  // Auto-open Slack page when a high-priority alert arrives
+  React.useEffect(() => {
+    if (alerts && alerts.length > 0) {
+      const last = alerts[alerts.length - 1];
+      if (last && typeof last.message === "string" && last.message.toLowerCase().includes("high urgency")) {
+        window.location.hash = "#/slack";
+      }
+    }
+  }, [alerts]);
+
+  if (route === "#/slack") {
+    return <SlackPage alerts={alerts} />;
   }
 
   return (
@@ -58,13 +83,17 @@ export default function App() {
           <button type="submit" disabled={loading}>
             {loading ? "Submitting..." : "Submit Ticket"}
           </button>
+          <button type="button" className="btn" style={{ marginLeft: 8 }} onClick={() => { window.location.hash = "#slack"; setShowSlack(true); }}>
+            Open IT Panel
+          </button>
         </div>
       </form>
 
-      <div className="card">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }} className="card">
         <h2 style={{ marginTop: 0 }}>Live Pipeline</h2>
         <PipelineFlow activeStep={activeStep} />
       </div>
+      {showSlack && <React.Suspense fallback={null}><SlackPanel visible={showSlack} onClose={() => setShowSlack(false)} alerts={alerts} /></React.Suspense>}
 
       <div className="card">
         <h3>Response</h3>
