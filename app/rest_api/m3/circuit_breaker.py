@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 circuit_breaker.py
 
@@ -36,15 +37,13 @@ Usage:
 The classify_func should accept the ticket and return a category string.
 The urgency_func should accept the ticket and return a float urgency in [0,1].
 """
-from __future__ import annotations
-
 import time
 import threading
 import logging
 from typing import Callable, Tuple
 
-from .classifier import keyword_classify
-from .models import Ticket
+from ..classifier import keyword_classify
+from ..models import Ticket
 
 logger = logging.getLogger(__name__)
 

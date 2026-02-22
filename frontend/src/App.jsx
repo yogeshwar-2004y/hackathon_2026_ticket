@@ -1,6 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import PipelineFlow from "./PipelineFlow";
 import SlackPanel from "./SlackPanel";
+import SlackPage from "./SlackPage";
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:5100";
+const WS_BASE = API_BASE.replace(/^http/, "ws");
 
 export default function App() {
   const [subject, setSubject] = useState("");
@@ -13,13 +17,27 @@ export default function App() {
   const [activeStep, setActiveStep] = useState(-1);
   const [showSlack, setShowSlack] = useState(false);
   const [alerts, setAlerts] = useState([]);
+  const [statusEvents, setStatusEvents] = useState([]);
+
+  useEffect(() => {
+    const ws = new WebSocket(`${WS_BASE}/ws/status`);
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        setStatusEvents((prev) => [data, ...prev].slice(0, 100));
+      } catch {
+        // ignore malformed events
+      }
+    };
+    return () => ws.close();
+  }, []);
 
   async function submit(e) {
     e.preventDefault();
     setLoading(true);
     setResp(null);
     try {
-      const res = await fetch("http://127.0.0.1:5100/submit", {
+      const res = await fetch(`${API_BASE}/tickets`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subject, body, customer }),
@@ -83,7 +101,7 @@ export default function App() {
           <button type="submit" disabled={loading}>
             {loading ? "Submitting..." : "Submit Ticket"}
           </button>
-          <button type="button" className="btn" style={{ marginLeft: 8 }} onClick={() => { window.location.hash = "#slack"; setShowSlack(true); }}>
+          <button type="button" className="btn" style={{ marginLeft: 8 }} onClick={() => { window.location.hash = "#/slack"; setShowSlack(true); }}>
             Open IT Panel
           </button>
         </div>
@@ -93,15 +111,27 @@ export default function App() {
         <h2 style={{ marginTop: 0 }}>Live Pipeline</h2>
         <PipelineFlow activeStep={activeStep} />
       </div>
-      {showSlack && <React.Suspense fallback={null}><SlackPanel visible={showSlack} onClose={() => setShowSlack(false)} alerts={alerts} /></React.Suspense>}
+      {showSlack && <React.Suspense fallback={null}><SlackPanel visible={showSlack} onClose={() => { setShowSlack(false); window.location.hash = ""; }} alerts={alerts} /></React.Suspense>}
 
       <div className="card">
         <h3>Response</h3>
         <pre>{resp ? JSON.stringify(resp, null, 2) : "No response yet"}</pre>
         {ticketId && (
+          <div style={{ marginTop: 12 }}>
+            <h4>Live Status</h4>
+            <div style={{ fontFamily: "monospace", fontSize: 13 }}>
+              {(statusEvents.filter((e) => e.ticket_id === ticketId).slice(0, 8)).map((e, idx) => (
+                <div key={`${e.timestamp || "ts"}-${idx}`}>
+                  {new Date((e.timestamp || 0) * 1000).toLocaleTimeString()} - {e.status}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {ticketId && (
           <div style={{ marginTop: 8 }}>
             <button onClick={async () => {
-              const r = await fetch(`http://127.0.0.1:5100/ticket_logs/${ticketId}`);
+              const r = await fetch(`${API_BASE}/ticket_logs/${ticketId}`);
               const j = await r.json();
               setLogs(j.logs || []);
             }}>View Simulation</button>
@@ -125,7 +155,7 @@ export default function App() {
 
       <footer className="card small">
         <p>
-          Frontend (Vite + React). Submit tickets to the Flask backend at <code>http://127.0.0.1:5100/submit</code>.
+          Frontend (Vite + React). Submit tickets to the Flask backend at <code>{API_BASE}/tickets</code>.
         </p>
       </footer>
     </div>

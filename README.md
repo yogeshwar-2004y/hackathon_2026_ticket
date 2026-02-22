@@ -30,6 +30,64 @@ Running
   python run.py
   ```
 
+Milestone 2 as separate services (API + Celery worker)
+------------------------------------------------------
+
+Run these in separate terminals.
+
+1) Start infra (Redis/Mongo):
+
+```bash
+docker compose up -d
+```
+
+2) Start API service:
+
+Linux/macOS:
+```bash
+export ROUTER_MODE=m2
+export REDIS_URL=redis://127.0.0.1:6379/0
+python run.py
+```
+
+Windows PowerShell:
+```powershell
+$env:ROUTER_MODE="m2"
+$env:REDIS_URL="redis://127.0.0.1:6379/0"
+python run.py
+```
+
+3) Start Celery worker service:
+
+Linux/macOS:
+```bash
+export ROUTER_MODE=m2
+export REDIS_URL=redis://127.0.0.1:6379/0
+python run_m2_worker.py
+```
+
+Windows PowerShell:
+```powershell
+$env:ROUTER_MODE="m2"
+$env:REDIS_URL="redis://127.0.0.1:6379/0"
+python run_m2_worker.py
+```
+
+Milestone 3 worker from root
+----------------------------
+
+Windows PowerShell:
+```powershell
+$env:REDIS_URL="redis://127.0.0.1:6379/0"
+python run_m3_worker.py
+```
+
+Linux/macOS:
+```bash
+export REDIS_URL=redis://127.0.0.1:6379/0
+python run_m3_worker.py
+```
+
 Example curl
 
 ```bash

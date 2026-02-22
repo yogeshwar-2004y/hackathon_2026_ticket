@@ -14,6 +14,11 @@ INCOMING_LIST = "incoming_tasks"
 class QueueManager:
     """
     Redis + Mongo-backed queue manager.
+
+    - enqueue_ticket(ticket): store ticket in Mongo and push ticket.id onto Redis incoming list
+    - push_priority(ticket_id, urgency): add ticket to Redis sorted set and mark Mongo doc
+    - pop_priority(): atomically pop highest-urgency ticket id (ZPOPMAX) and return Mongo doc
+    - peek_all(): return list of Mongo docs ordered by urgency (descending)
     """
 
     def __init__(self, redis_url: str = REDIS_URL, mongo_uri: str = MONGO_URI):
@@ -21,15 +26,15 @@ class QueueManager:
         self.mongo = MongoClient(mongo_uri)
         self.db = self.mongo["ticket_router"]
         self.tickets = self.db["tickets"]
-        # ensure indexes
+        # ensure indexes (wrap in try-except for environments where DB requires auth we don't have)
         try:
             self.tickets.create_index([("created_at", ASCENDING)])
             self.tickets.create_index([("urgency", DESCENDING)])
-        except Exception:
-            # ignore index errors (e.g., when Mongo not available at import time)
-            pass
+        except Exception as e:
+            print(f"Warning: Could not create indexes on MongoDB: {e}")
 
     def enqueue_ticket(self, ticket: Any) -> None:
+        """Insert ticket into Mongo (status=received) and push id to Redis incoming list."""
         doc = {
             "_id": ticket.id,
             "id": ticket.id,
@@ -42,17 +47,27 @@ class QueueManager:
             "metadata": ticket.metadata or {},
             "created_at": ticket.created_at,
         }
+        # upsert
         self.tickets.replace_one({"_id": ticket.id}, doc, upsert=True)
+        # push to incoming list for workers
         self.redis.rpush(INCOMING_LIST, ticket.id)
 
     def push_priority(self, ticket_id: str, urgency: float) -> None:
+        """Add ticket to Redis sorted set (priority) and update Mongo doc."""
+        # score = urgency (higher = more urgent). We'll use score directly; ZPOPMAX will retrieve highest.
         self.redis.zadd(PRIORITY_SET, {ticket_id: float(urgency)})
-        try:
-            self.tickets.update_one({"_id": ticket_id}, {"$set": {"urgency": float(urgency), "status": "queued"}})
-        except Exception:
-            pass
+        # update mongo
+        self.tickets.update_one({"_id": ticket_id}, {"$set": {"urgency": float(urgency), "status": "queued"}})
+
+    def update_ticket_status(self, ticket_id: str, status: str, **fields: Any) -> None:
+        """Update status (and optional fields) for a ticket in MongoDB."""
+        updates: Dict[str, Any] = {"status": status, "updated_at": time.time()}
+        if fields:
+            updates.update(fields)
+        self.tickets.update_one({"_id": ticket_id}, {"$set": updates}, upsert=True)
 
     def pop_priority(self) -> Optional[Dict[str, Any]]:
+        """Atomically pop highest urgency ticket from Redis and return its Mongo doc."""
         res = self.redis.zpopmax(PRIORITY_SET, 1)
         if not res:
             return None
@@ -61,12 +76,15 @@ class QueueManager:
         return doc
 
     def peek_all(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Return list of ticket docs ordered by urgency desc (top first)."""
         ids = self.redis.zrevrange(PRIORITY_SET, 0, limit - 1)
         if not ids:
             return []
         docs = list(self.tickets.find({"_id": {"$in": ids}}))
+        # Order docs by ids order
         id_to_doc = {d["_id"]: d for d in docs}
         ordered = [id_to_doc.get(i) for i in ids if i in id_to_doc]
+        # convert fields expected by UI
         results = []
         for d in ordered:
             results.append(
