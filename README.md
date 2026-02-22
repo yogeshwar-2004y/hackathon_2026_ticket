@@ -1,113 +1,62 @@
-# Support Ticket Router
+# Support Ticket AI Router
 
-Lightweight Flask-based support ticket routing system.
+An intelligent, multi-stage support ticket routing system powered by Flask, Celery, Redis, MongoDB, and HuggingFace Transformers.
 
-Project goal
-- Implement Milestone 1 (keyword router) and Milestone 2 (transformer-based background enhancement).
-- Milestone 3 prepared as boilerplate placeholders only.
+This project implements an autonomous three-stage pipeline to handle, classify, and intelligently route incoming support tickets based on semantic meaning, urgency, and agent skill sets.
 
-How to install
+## Architecture & Milestones
 
-1. Create a Python 3.10+ virtualenv and activate it:
+The system is built as a series of evolving milestones combined into a single robust pipeline.
 
+### 1. Milestone 1: Baseline Router (Fast Path)
+A synchronous, keyword-based classifier that acts as the initial fallback fast-path.
+* **Mechanism:** Uses regex rules (e.g., `urgency`, `ASAP`, `billing`) to assign categories and an initial urgency score.
+* **Fallback Role:** If the more complex machine learning models fail or time out, the system automatically degrades gracefully via a Circuit Breaker to use this M1 baseline so no tickets are dropped.
+
+### 2. Milestone 2: Intelligent Queue Prioritization (Worker 1)
+An async ML worker that analyzes text to dynamically rank queue priority.
+* **Mechanism:** Uses a zero-shot HuggingFace Transformer (`typeform/distilbert-base-uncased-mnli`) to predict ticket categories (`Technical`, `Billing`, `Legal`) and calculate confidence.
+* **Circuit Breaker:** Implements a robust `CircuitBreaker` pattern. If the ML inference times out or fails repeatedly, it opens the circuit and defers to the M1 Keyword fallback router.
+* **Queuing:** Successfully processed tickets are pushed to specific Redis message queues (`high`, `medium`, `low`) based on their calculated urgency scores.
+
+### 3. Milestone 3: Semantic Deduplication & Skill-Based Routing (Worker 2)
+A secondary background worker performing heavy semantic lifting.
+* **Blocking Reads:** Listens to the Redis queues utilizing a strict priority ordering strategy (`high`, `medium`, `low`).
+* **Semantic Deduplication:** Generates embeddings for the ticket text using `all-MiniLM-L6-v2`. It continuously calculates the Cosine Similarity against a rolling 5-minute Redis window. If 10+ tickets match with >0.9 similarity, it suppresses them and escalates a Master Incident (Flash-Flood protection).
+* **Skill-Based Routing:** Routes the deduplicated ticket to the active agent with the highest skill match score for the identified category. If multiple agents tie, it routes to the agent currently carrying the lowest active workload, tracking everything live in MongoDB.
+
+---
+
+## Deployment & Setup
+
+This application is ready to be hosted on **Render** using the provided `render.yaml` blueprint. The Blueprint provisions:
+1. **API Web Service** (Gunicorn / Flask)
+2. **Worker M2** (Celery Zero-Shot Classifier)
+3. **Worker M3** (Celery Embeddings & Router) 
+4. **Vite React Frontend** (Static Site UI)
+5. **Redis** (Task Broker & Key-Value state)
+
+### Running Locally (Docker)
+
+1. Start infrastructural dependencies (Redis & MongoDB):
+```bash
+docker compose up -d
+```
+
+2. Create a virtual environment and install backend dependencies:
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Running
+3. Open three separate terminal tabs and start the services:
+   * **API Service:** `python run.py`
+   * **M2 Worker:** `python run_m2_worker.py`
+   * **M3 Worker:** `python run_m3_worker.py`
 
-- Milestone 1 (synchronous keyword router):
-  ```bash
-  export ROUTER_MODE=m1
-  python run.py
-  ```
-
-- Milestone 2 (async model-enhanced router):
-  ```bash
-  export ROUTER_MODE=m2
-  python run.py
-  ```
-
-Milestone 2 as separate services (API + Celery worker)
-------------------------------------------------------
-
-Run these in separate terminals.
-
-1) Start infra (Redis/Mongo):
-
-```bash
-docker compose up -d
-```
-
-2) Start API service:
-
-Linux/macOS:
-```bash
-export ROUTER_MODE=m2
-export REDIS_URL=redis://127.0.0.1:6379/0
-python run.py
-```
-
-Windows PowerShell:
-```powershell
-$env:ROUTER_MODE="m2"
-$env:REDIS_URL="redis://127.0.0.1:6379/0"
-python run.py
-```
-
-3) Start Celery worker service:
-
-Linux/macOS:
-```bash
-export ROUTER_MODE=m2
-export REDIS_URL=redis://127.0.0.1:6379/0
-python run_m2_worker.py
-```
-
-Windows PowerShell:
-```powershell
-$env:ROUTER_MODE="m2"
-$env:REDIS_URL="redis://127.0.0.1:6379/0"
-python run_m2_worker.py
-```
-
-Milestone 3 worker from root
-----------------------------
-
-Windows PowerShell:
-```powershell
-$env:REDIS_URL="redis://127.0.0.1:6379/0"
-python run_m3_worker.py
-```
-
-Linux/macOS:
-```bash
-export REDIS_URL=redis://127.0.0.1:6379/0
-python run_m3_worker.py
-```
-
-Example curl
-
-```bash
-curl -X POST http://127.0.0.1:5000/tickets \
-  -H "Content-Type: application/json" \
-  -d '{"subject":"Billing issue","body":"I was charged twice, please refund ASAP!!","customer":"alice@example.com"}'
-```
-
-Status
-
-- Milestone 1 & 2 fully working. Milestone 3 prepared as boilerplate only.
-
-
-Frontend (optional)
--------------------
-
-This repo includes a minimal React + Vite frontend in `frontend/` that can be used
-to submit tickets from a browser.
-
-How to run frontend:
+### Running the Frontend locally (Optional)
+The project includes a Vite + React frontend for a live view of the pipeline.
 
 ```bash
 cd frontend
@@ -115,42 +64,19 @@ npm install
 npm run dev
 ```
 
-The frontend talks to the backend at `http://127.0.0.1:5000/tickets`. Run the Flask
-app first, then the frontend dev server.
+The frontend will run on `http://localhost:5173` and automatically connect to your local backend API.
 
-Redis & Mongo (optional - for M2 broker & persistence)
-----------------------------------------------------
-This project can use Redis as a broker (incoming task list + priority sorted set)
-and MongoDB to persist tickets. If you enable these services the backend will
-enqueue tickets to Redis and store ticket documents in MongoDB.
+---
 
-Install & run locally (macOS examples):
+## Testing via API
+
+You can trigger a test ticket manually via `cURL`:
 
 ```bash
-# Redis
-brew install redis
-redis-server /usr/local/etc/redis.conf
-
-# MongoDB (Community)
-brew tap mongodb/brew
-brew install mongodb-community@6.0
-brew services start mongodb-community@6.0
+curl -X POST http://127.0.0.1:5100/tickets \
+  -H "Content-Type: application/json" \
+  -d '{"subject":"Database Crash", "body":"Our production DB01 instance is down, please fix ASAP!!", "customer":"admin@example.com"}'
 ```
 
-Environment variables:
-
-- REDIS_URL (default: redis://127.0.0.1:6379/0)
-- MONGO_URI (default: mongodb://127.0.0.1:27017)
-
-When Redis/Mongo are running, start the backend (M2 mode) as before:
-
-```bash
-export ROUTER_MODE=m2
-export REDIS_URL=redis://127.0.0.1:6379/0
-export MONGO_URI=mongodb://127.0.0.1:27017
-python run.py
-```
-
-The background worker will BRPOP from Redis incoming list and push processed
-tickets into a Redis sorted set for priority.
+_Note: If using Render, swap `http://127.0.0.1:5100` with your deployed Render URL._
 
