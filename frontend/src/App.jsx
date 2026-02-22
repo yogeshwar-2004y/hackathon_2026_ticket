@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import PipelineFlow from "./PipelineFlow";
 
 export default function App() {
@@ -10,6 +10,20 @@ export default function App() {
   const [ticketId, setTicketId] = useState(null);
   const [logs, setLogs] = useState([]);
   const [activeStep, setActiveStep] = useState(-1);
+  const [statusEvents, setStatusEvents] = useState([]);
+
+  useEffect(() => {
+    const ws = new WebSocket("ws://127.0.0.1:5100/ws/status");
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        setStatusEvents((prev) => [data, ...prev].slice(0, 100));
+      } catch {
+        // ignore malformed events
+      }
+    };
+    return () => ws.close();
+  }, []);
 
   async function submit(e) {
     e.preventDefault();
@@ -69,6 +83,18 @@ export default function App() {
       <div className="card">
         <h3>Response</h3>
         <pre>{resp ? JSON.stringify(resp, null, 2) : "No response yet"}</pre>
+        {ticketId && (
+          <div style={{ marginTop: 12 }}>
+            <h4>Live Status</h4>
+            <div style={{ fontFamily: "monospace", fontSize: 13 }}>
+              {(statusEvents.filter((e) => e.ticket_id === ticketId).slice(0, 8)).map((e, idx) => (
+                <div key={`${e.timestamp || "ts"}-${idx}`}>
+                  {new Date((e.timestamp || 0) * 1000).toLocaleTimeString()} - {e.status}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {ticketId && (
           <div style={{ marginTop: 8 }}>
             <button onClick={async () => {

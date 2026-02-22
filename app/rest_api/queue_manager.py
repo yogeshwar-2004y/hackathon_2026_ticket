@@ -59,6 +59,13 @@ class QueueManager:
         # update mongo
         self.tickets.update_one({"_id": ticket_id}, {"$set": {"urgency": float(urgency), "status": "queued"}})
 
+    def update_ticket_status(self, ticket_id: str, status: str, **fields: Any) -> None:
+        """Update status (and optional fields) for a ticket in MongoDB."""
+        updates: Dict[str, Any] = {"status": status, "updated_at": time.time()}
+        if fields:
+            updates.update(fields)
+        self.tickets.update_one({"_id": ticket_id}, {"$set": updates}, upsert=True)
+
     def pop_priority(self) -> Optional[Dict[str, Any]]:
         """Atomically pop highest urgency ticket from Redis and return its Mongo doc."""
         res = self.redis.zpopmax(PRIORITY_SET, 1)

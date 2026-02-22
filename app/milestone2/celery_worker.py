@@ -4,6 +4,8 @@ from app.milestone2.celery_config import celery_app
 from app.rest_api.classifier import model_classify
 from app.rest_api.circuit_breaker import get_circuit_breaker
 from app.rest_api.models import Ticket
+from app.rest_api.queue_manager import queue_manager
+from app.rest_api.ws_status import publish_status
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +25,13 @@ def process_ticket(ticket_dict):
     and then forwards it to Milestone 3 queues (high, medium, low).
     """
     logger.info(f"Worker received ticket: {ticket_dict.get('id')}")
+    ticket_id = ticket_dict.get("id")
+    if ticket_id:
+        try:
+            queue_manager.update_ticket_status(ticket_id, "processing")
+            publish_status(ticket_id, "processing")
+        except Exception:
+            pass
     
     ticket = Ticket(
         id=ticket_dict.get("id"),
@@ -50,9 +59,26 @@ def process_ticket(ticket_dict):
         logger.exception("Classification failed")
         from app.rest_api.classifier import keyword_classify
         final_cat, m1_score = keyword_classify(ticket.subject, ticket.body)
+        final_urg_score = float(m1_score)
         final_label = score_to_label(m1_score)
 
     logger.info(f"Ticket {ticket.id} classified as {final_cat} with urgency {final_label}")
+    try:
+        queue_manager.update_ticket_status(
+            ticket.id,
+            "classified",
+            category=final_cat,
+            urgency=float(final_urg_score),
+            metadata=ticket.metadata,
+        )
+        publish_status(
+            ticket.id,
+            "classified",
+            category=final_cat,
+            urgency=final_label,
+        )
+    except Exception:
+        pass
     
     # Forward JSON text to Milestone 3 while preserving its
     # existing signature: process_ticket(ticket_text, priority)
@@ -72,5 +98,16 @@ def process_ticket(ticket_dict):
         queue=final_label
     )
     logger.info(f"Ticket {ticket.id} forwarded to queue: {final_label}")
+    try:
+        queue_manager.update_ticket_status(
+            ticket.id,
+            "forwarded_to_m3",
+            category=final_cat,
+            urgency=final_label,
+            m3_queue=final_label,
+        )
+        publish_status(ticket.id, "forwarded_to_m3", queue=final_label)
+    except Exception:
+        pass
     
     return {"ticket_id": ticket.id, "status": "processed", "category": final_cat, "urgency": final_label}

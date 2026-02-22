@@ -7,6 +7,7 @@ from .models import Ticket
 from .classifier import keyword_classify
 from .queue_manager import queue_manager
 from .circuit_breaker import get_circuit_breaker
+from .ws_status import init_ws, publish_status
 
 MODE = os.getenv("ROUTER_MODE", "m2").lower()
 
@@ -16,6 +17,7 @@ def create_app():
     # Allow cross-origin requests from the frontend dev server (and others).
     # In production restrict origins appropriately.
     CORS(app, resources={r"/*": {"origins": "*"}})
+    init_ws(app)
 
     @app.route("/", methods=["GET"])
     def index():
@@ -76,6 +78,26 @@ def create_app():
         # Milestone 2 async: accept quickly, process via Celery worker
         else:
             ticket.status = "received"
+            try:
+                queue_manager.tickets.replace_one(
+                    {"_id": ticket.id},
+                    {
+                        "_id": ticket.id,
+                        "id": ticket.id,
+                        "subject": ticket.subject,
+                        "body": ticket.body,
+                        "customer": ticket.customer,
+                        "category": None,
+                        "urgency": 0.0,
+                        "status": "received",
+                        "metadata": {},
+                        "created_at": ticket.created_at,
+                    },
+                    upsert=True,
+                )
+                publish_status(ticket.id, "received")
+            except Exception:
+                pass
             ticket_data = {
                 "id": ticket.id,
                 "subject": ticket.subject,
