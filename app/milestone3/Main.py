@@ -12,11 +12,14 @@ load_dotenv()
 # We will use Redis as the Celery broker and backend
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
-# Initialize Celery explicitly naming the app 'Main' to match this file
-app = Celery('Main', broker=REDIS_URL, backend=REDIS_URL)
+# Initialize Celery explicitly naming the app 'Main' to match this file. No backend needed for now.
+app = Celery('Main', broker=REDIS_URL)
 
 # Configure Celery routing
 app.conf.task_default_queue = 'default'
+app.conf.broker_transport_options = {
+    'queue_order_strategy': 'priority',
+}
 app.conf.task_routes = {
     'Main.process_ticket': {'queue': 'default'},
 }
@@ -40,8 +43,53 @@ def cosine_similarity(v1, v2):
     return dot_product / (norm_v1 * norm_v2)
 
 
-@app.task
-def process_ticket(ticket_text, priority):
+# Mock Agent Registry (In a real app, this would be in Redis or a DB)
+agents = {
+    "Agent_A": {"name": "Alice", "skills": {"Technical": 0.9, "Billing": 0.1, "Legal": 0.0}},
+    "Agent_B": {"name": "Bob", "skills": {"Technical": 0.2, "Billing": 0.8, "Legal": 0.0}},
+    "Agent_C": {"name": "Charlie", "skills": {"Technical": 0.0, "Billing": 0.2, "Legal": 0.8}},
+    "Agent_D": {"name": "Dana", "skills": {"Technical": 0.9, "Billing": 0.1, "Legal": 0.0}}
+}
+
+def find_best_agent(category):
+    """
+    Finds the best agent based on highest skill match for the given category.
+    If there's a tie, selects the agent with the lowest current workload.
+    """
+    best_agents = []
+    highest_score = -1
+
+    for agent_id, data in agents.items():
+        score = data["skills"].get(category, 0)
+        
+        if score > highest_score:
+            highest_score = score
+            best_agents = [agent_id]
+        elif score == highest_score and score > 0:
+            best_agents.append(agent_id)
+
+    if not best_agents:
+        return None
+
+    if len(best_agents) == 1:
+        return best_agents[0]
+        
+    # Tie-breaker: least workload
+    min_load = float('inf')
+    chosen_agent = None
+    
+    for agent_id in best_agents:
+        # Get workload from Redis, default to 0 if not present
+        current_load = int(redis_client.get(f"agent:{agent_id}:load") or 0)
+        if current_load < min_load:
+            min_load = current_load
+            chosen_agent = agent_id
+
+    return chosen_agent
+
+
+@app.task(ignore_result=True)
+def process_ticket(ticket_text, priority, category):
     """
     Celery task to process incoming tickets and perform Semantic Deduplication.
     Uses Redis to share state across potential multiple workers.
@@ -83,6 +131,7 @@ def process_ticket(ticket_text, priority):
                 
     # 4. Deduplicate if Flash-Flood condition is met (> 10 similar tickets)
     print("-" * 50)
+    assigned_agent = None
     if similar_count >= 10:
         print(f"[MASTER INCIDENT CREATED] Flash-flood detected! Suppressing duplicate alert.")
         print(f"Priority: {priority.upper()} | Ticket: '{ticket_text}'")
@@ -90,6 +139,14 @@ def process_ticket(ticket_text, priority):
     else:
         print(f"[ALERT] Processed new ticket: '{ticket_text}'")
         print(f"Priority: {priority.upper()} | Similar past tickets: {similar_count}")
+        
+        # Route to the best agent based on simple classification match
+        assigned_agent = find_best_agent(category)
+        if assigned_agent:
+            redis_client.incr(f"agent:{assigned_agent}:load")
+            print(f"[ROUTED] Ticket assigned to {agents[assigned_agent]['name']} (Score: {agents[assigned_agent]['skills'].get(category, 0)})")
+        else:
+            print("[QUEUED] No suitable agent found for category.")
     print("-" * 50)
         
     # 5. Store this ticket's embedding and text in Redis for the rolling window
@@ -97,7 +154,9 @@ def process_ticket(ticket_text, priority):
     redis_client.hset(f"ticket:{ticket_id}", 'text', ticket_text)
     redis_client.hset(f"ticket:{ticket_id}", 'embedding', embedding.astype(np.float32).tobytes())
 
-    return {"status": "success", "ticket_id": ticket_id, "similar_count": similar_count}
+    result = {"status": "success", "ticket_id": ticket_id, "similar_count": similar_count, "agent": assigned_agent}
+    print(f"[FINAL RESULT] {result}\n")
+    return result
 
 if __name__ == '__main__':
     # When run directly, we can start the worker for convenience
