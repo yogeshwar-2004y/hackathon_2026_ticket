@@ -17,3 +17,15 @@ textarea{resize:vertical}
 button{background:var(--accent);color:#022;border:none;padding:10px 14px;border-radius:8px;cursor:pointer;font-weight:600}
 pre{background:rgba(0,0,0,0.25);padding:12px;border-radius:6px;color:var(--text);overflow:auto}
 
+.pipeline-root{display:flex;align-items:center;gap:8px;overflow-x:auto;padding:16px 0}
+.pipeline-segment{display:flex;align-items:center;gap:8px;position:relative}
+.pipeline-node{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.03);border:2px solid transparent;transition:all 300ms}
+.pipeline-node .pipeline-icon{font-size:20px}
+.pipeline-node.done{background:linear-gradient(135deg,#00d4aa,#0099cc);box-shadow:0 6px 18px rgba(0,212,170,0.12);color:#022}
+.pipeline-node.active{border:2px solid #00d4aa;box-shadow:0 8px 22px rgba(0,212,170,0.18)}
+.pipeline-text{display:flex;flex-direction:column;align-items:center;min-width:90px}
+.pipeline-label{font-size:11px;color:var(--text);font-weight:700}
+.pipeline-sub{font-size:9px;color:#94a3b8}
+.pipeline-connector{width:28px;height:4px;background:rgba(255,255,255,0.06);border-radius:4px;transition:background 300ms}
+.pipeline-connector.filled{background:linear-gradient(90deg,#00d4aa,#0099cc)}
+

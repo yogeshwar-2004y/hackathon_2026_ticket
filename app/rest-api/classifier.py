@@ -1,5 +1,5 @@
 import re
-from typing import Tuple
+from typing import Tuple, List
 import logging
 
 from transformers import pipeline

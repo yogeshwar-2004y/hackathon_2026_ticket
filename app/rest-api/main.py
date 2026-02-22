@@ -3,13 +3,11 @@ import time
 import uuid
 from flask import current_app, Flask, request, jsonify, render_template
 from flask_cors import CORS
-from app.models import Ticket
-from app.classifier import keyword_classify
-from app.queue_manager import queue_manager
-from app.background import background_service
-from app.circuit_breaker import get_circuit_breaker
-from app.milestone2 import intelligent_queue_flask as m2_intel
-from app.milestone2 import worker as m2_worker
+from .models import Ticket
+from .classifier import keyword_classify
+from .queue_manager import queue_manager
+from .background import background_service
+from .circuit_breaker import get_circuit_breaker
 
 MODE = os.getenv("ROUTER_MODE", "m2").lower()
 
@@ -23,25 +21,6 @@ def create_app():
     # ensure background service initialized (only in m2)
     if MODE == "m2":
         background_service.start()
-        # register milestone2 endpoints on the main app
-        # use the functions defined in app.milestone2.intelligent_queue_flask
-        app.add_url_rule("/submit", "submit_ticket", m2_intel.submit_ticket, methods=["POST"])
-        app.add_url_rule("/next", "next_ticket", m2_intel.next_ticket, methods=["GET"])
-        app.add_url_rule("/ticket_logs/<ticket_id>", "ticket_logs", m2_intel.get_ticket_logs, methods=["GET"])
-        # start milestone2 worker in a daemon thread
-        import threading
-
-        def _start_m2_worker():
-            try:
-                m2_worker.run_worker()
-            except Exception as e:
-                # log and swallow to avoid crashing the main thread
-                import logging
-
-                logging.exception("Milestone2 worker failed: %s", e)
-
-        t = threading.Thread(target=_start_m2_worker, daemon=True)
-        t.start()
 
     @app.route("/", methods=["GET"])
     def index():

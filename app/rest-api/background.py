@@ -5,10 +5,10 @@ import os
 import logging
 from typing import Optional
 
-from app.classifier import keyword_classify, model_classify
-from app.queue_manager import queue_manager
-from app.notifications import notify_console, notify_slack
-from app.circuit_breaker import get_circuit_breaker
+from .classifier import keyword_classify, model_classify
+from .queue_manager import queue_manager
+from .notifications import notify_console, notify_slack
+from .circuit_breaker import get_circuit_breaker
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ class BackgroundService:
                     logger.warning("Ticket %s not found in Mongo; skipping", ticket_id)
                     continue
                 # convert doc to a simple Ticket-like object for processing
-                from app.models import Ticket
+                from .models import Ticket
 
                 ticket = Ticket(
                     id=doc.get("_id"),
