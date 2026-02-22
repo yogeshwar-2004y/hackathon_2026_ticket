@@ -8,6 +8,33 @@ This project implements an autonomous three-stage pipeline to handle, classify, 
 
 The system is built as a series of evolving milestones combined into a single robust pipeline.
 
+```mermaid
+flowchart TD
+    Ticket[Ticket JSON] --> API[API]
+    API == ticket_pipe ==> Worker2
+    
+    subgraph Worker2[Worker 2 / Milestone 1 & 2]
+        direction TB
+        subgraph Classifier
+            direction LR
+            ML[ML model<br>classification<br>urgency: high, medium, low]
+            Regex[Regex Fast-Path<br>classification<br>urgency: high, low]
+            ML -.-> |Circuit Breaker Override| Regex
+        end
+    end
+    
+    Worker2 ==>|high| M3
+    Worker2 ==>|medium| M3
+    Worker2 ==>|low| M3
+    
+    subgraph M3[Milestone 3 / Worker 3]
+        direction TB
+        Sim[Similarity Check<br>with 5min sliding window<br/>read blocking redis<br>pop from high to low]
+        Opt[Skill-Based Grouping<br>Constrained optimization problem<br><br>e.g.<br>user: billing 0.2, technical 0.8<br>ticket: billing 1, technical 0]
+        Sim --> Opt
+    end
+```
+
 ### 1. Milestone 1: Baseline Router (Fast Path)
 A synchronous, keyword-based classifier that acts as the initial fallback fast-path.
 * **Mechanism:** Uses regex rules (e.g., `urgency`, `ASAP`, `billing`) to assign categories and an initial urgency score.
