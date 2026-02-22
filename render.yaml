@@ -1,0 +1,74 @@
+services:
+  - type: web
+    name: ticket-router-api
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 2 --threads 2 run:app
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.2
+      - key: PORT
+        value: 5100
+      - key: ROUTER_MODE
+        value: m2
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: ticket-router-redis
+          property: connectionString
+      - key: MONGO_URI
+        sync: false
+
+  - type: worker
+    name: ticket-router-m2-worker
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python run_m2_worker.py
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.2
+      - key: ROUTER_MODE
+        value: m2
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: ticket-router-redis
+          property: connectionString
+      - key: MONGO_URI
+        sync: false
+
+  - type: worker
+    name: ticket-router-m3-worker
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python run_m3_worker.py
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.2
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: ticket-router-redis
+          property: connectionString
+      - key: MONGO_URI
+        sync: false
+
+  - type: static
+    name: ticket-router-frontend
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://ticket-router-api.onrender.com
+
+  - type: redis
+    name: ticket-router-redis
+    plan: free
+    maxmemoryPolicy: noeviction

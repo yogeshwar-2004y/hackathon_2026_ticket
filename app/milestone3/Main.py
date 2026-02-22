@@ -40,7 +40,7 @@ print("Model loaded.")
 
 # Connect to Redis to hold the 5-minute rolling window state
 redis_client = redis.Redis.from_url(REDIS_URL)
-mongo = MongoClient(MONGO_URI)
+mongo = MongoClient(MONGO_URI, serverSelectionTimeoutMS=3000)
 db = mongo["ticket_router"]
 tickets_col = db["tickets"]
 agents_col = db["agents"]

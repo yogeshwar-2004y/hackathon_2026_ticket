@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import PipelineFlow from "./PipelineFlow";
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:5100";
+const WS_BASE = API_BASE.replace(/^http/, "ws");
+
 export default function App() {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
@@ -13,7 +16,7 @@ export default function App() {
   const [statusEvents, setStatusEvents] = useState([]);
 
   useEffect(() => {
-    const ws = new WebSocket("ws://127.0.0.1:5100/ws/status");
+    const ws = new WebSocket(`${WS_BASE}/ws/status`);
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
@@ -30,7 +33,7 @@ export default function App() {
     setLoading(true);
     setResp(null);
     try {
-      const res = await fetch("http://127.0.0.1:5100/tickets", {
+      const res = await fetch(`${API_BASE}/tickets`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subject, body, customer }),
@@ -40,7 +43,7 @@ export default function App() {
       setTicketId(data.ticket_id || null);
       // animate pipeline
       setActiveStep(0);
-      const steps = [1,2,3,4,5,6];
+      const steps = [1, 2, 3, 4, 5, 6];
       steps.forEach((s, idx) => {
         setTimeout(() => setActiveStep(s), 600 * (idx + 1));
       });
@@ -98,7 +101,7 @@ export default function App() {
         {ticketId && (
           <div style={{ marginTop: 8 }}>
             <button onClick={async () => {
-              const r = await fetch(`http://127.0.0.1:5100/ticket_logs/${ticketId}`);
+              const r = await fetch(`${API_BASE}/ticket_logs/${ticketId}`);
               const j = await r.json();
               setLogs(j.logs || []);
             }}>View Simulation</button>
@@ -122,7 +125,7 @@ export default function App() {
 
       <footer className="card small">
         <p>
-          Frontend (Vite + React). Submit tickets to the Flask backend at <code>http://127.0.0.1:5100/tickets</code>.
+          Frontend (Vite + React). Submit tickets to the Flask backend at <code>{API_BASE}/tickets</code>.
         </p>
       </footer>
     </div>
