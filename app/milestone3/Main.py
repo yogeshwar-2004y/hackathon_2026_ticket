@@ -204,6 +204,15 @@ def process_ticket(ticket_text, priority):
         print(f"[MASTER INCIDENT CREATED] Flash-flood detected! Suppressing duplicate alert.")
         print(f"Priority: {priority.upper()} | Ticket: '{ticket_text}'")
         print(f"Similarity: > 0.9 with {similar_count} recent tickets in the last 5 minutes.")
+        try:
+            publish_status(
+                ticket_id,
+                "master_incident",
+                priority=priority,
+                similar_count=int(similar_count)
+            )
+        except Exception:
+            pass
     else:
         print(f"[ALERT] Processed new ticket: '{ticket_text}'")
         print(f"Priority: {priority.upper()} | Similar past tickets: {similar_count}")

@@ -25,6 +25,14 @@ export default function App() {
       try {
         const data = JSON.parse(event.data);
         setStatusEvents((prev) => [data, ...prev].slice(0, 100));
+
+        // Trigger alerts for Flash Floods
+        if (data.status === "master_incident") {
+          setAlerts((prev) => [
+            ...prev,
+            { message: `[HIGH URGENCY] Flash-flood detected! ${data.similar_count} tickets suppressed into Master Incident.`, timestamp: data.timestamp }
+          ]);
+        }
       } catch {
         // ignore malformed events
       }
