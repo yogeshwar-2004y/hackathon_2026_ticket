@@ -6,7 +6,6 @@ from flask_cors import CORS
 from .models import Ticket
 from .classifier import keyword_classify
 from .queue_manager import queue_manager
-from .background import background_service
 from .circuit_breaker import get_circuit_breaker
 
 MODE = os.getenv("ROUTER_MODE", "m2").lower()
@@ -18,16 +17,13 @@ def create_app():
     # In production restrict origins appropriately.
     CORS(app, resources={r"/*": {"origins": "*"}})
 
-    # ensure background service initialized (only in m2)
-    if MODE == "m2":
-        background_service.start()
-
     @app.route("/", methods=["GET"])
     def index():
         # simple server-rendered UI for submitting tickets and viewing queue
         return render_template("index.html", mode=MODE)
 
     @app.route("/tickets", methods=["POST"])
+    @app.route("/submit", methods=["POST"])
     def create_ticket():
         payload = request.get_json(force=True)
         subject = payload.get("subject", "")
@@ -77,11 +73,18 @@ def create_app():
                 200,
             )
 
-        # Milestone 2 async: accept quickly, process via Redis broker + Mongo
+        # Milestone 2 async: accept quickly, process via Celery worker
         else:
-            # store minimal info and enqueue background processing via Redis + Mongo
             ticket.status = "received"
-            queue_manager.enqueue_ticket(ticket)
+            ticket_data = {
+                "id": ticket.id,
+                "subject": ticket.subject,
+                "body": ticket.body,
+                "customer": ticket.customer,
+                "created_at": ticket.created_at,
+            }
+            from app.milestone2.celery_worker import process_ticket
+            process_ticket.delay(ticket_data)
             return jsonify({"ticket_id": ticket.id, "status": "accepted"}), 202
 
     @app.route("/queue", methods=["GET"])

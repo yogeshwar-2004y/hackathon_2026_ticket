@@ -16,7 +16,7 @@ export default function App() {
     setLoading(true);
     setResp(null);
     try {
-      const res = await fetch("http://127.0.0.1:5100/submit", {
+      const res = await fetch("http://127.0.0.1:5100/tickets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subject, body, customer }),
@@ -96,7 +96,7 @@ export default function App() {
 
       <footer className="card small">
         <p>
-          Frontend (Vite + React). Submit tickets to the Flask backend at <code>http://127.0.0.1:5100/submit</code>.
+          Frontend (Vite + React). Submit tickets to the Flask backend at <code>http://127.0.0.1:5100/tickets</code>.
         </p>
       </footer>
     </div>

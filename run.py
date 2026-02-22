@@ -6,7 +6,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from app.main import create_app
+from app.rest_api.main import create_app
 
 app = create_app()
 

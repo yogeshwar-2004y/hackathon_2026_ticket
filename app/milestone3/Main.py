@@ -11,6 +11,9 @@ load_dotenv()
 
 # We will use Redis as the Celery broker and backend
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+HF_LOCAL_ONLY = os.getenv("HF_LOCAL_ONLY", "0").strip().lower() in {"1", "true", "yes"}
+M3_MODEL_ID = os.getenv("M3_MODEL_ID", "all-MiniLM-L6-v2")
+M3_MODEL_PATH = os.getenv("M3_MODEL_PATH", "").strip()
 
 # Initialize Celery explicitly naming the app 'Main' to match this file
 app = Celery('Main', broker=REDIS_URL, backend=REDIS_URL)
@@ -23,7 +26,8 @@ app.conf.task_routes = {
 
 # The user requested semantic deduplication using 'all-MiniLM-L6-v2'
 print("Loading SentenceTransformer model...")
-model = SentenceTransformer('all-MiniLM-L6-v2')
+model_ref = M3_MODEL_PATH if M3_MODEL_PATH else M3_MODEL_ID
+model = SentenceTransformer(model_ref, local_files_only=HF_LOCAL_ONLY)
 print("Model loaded.")
 
 # Connect to Redis to hold the 5-minute rolling window state
@@ -40,7 +44,7 @@ def cosine_similarity(v1, v2):
     return dot_product / (norm_v1 * norm_v2)
 
 
-@app.task
+@app.task(name="Main.process_ticket")
 def process_ticket(ticket_text, priority):
     """
     Celery task to process incoming tickets and perform Semantic Deduplication.
